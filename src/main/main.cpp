@@ -1,15 +1,12 @@
 #include <iostream>
 #include <mysql/mysql.h>
+#include "configuration.hpp"
 
 using namespace std;
 
 int main() {
-    MYSQL mysql;
-    mysql_init(&mysql);
-    cout << "mysql is running" << endl;
-    mysql_real_connect(&mysql, "localhost", "xxxx", "", "xxxx", 3306, NULL, 0);
-    string sql = " insert into student(id, name) values('12345', 'test');";
-    mysql_query(&mysql, sql.c_str());
-    mysql_close(&mysql);
+    mysql_orm::configuration cfg{"127.0.0.1", "root", "000000", "test", 3000, 1};
+    mysql_orm::config_manager::to_file(cfg, "mysql.cnf"sv);
+    cout << mysql_orm::config_manager::get<string>("passwd", "mysql.cnf"sv);
     return 0;
 }
