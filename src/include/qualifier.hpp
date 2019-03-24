@@ -1,5 +1,5 @@
 //
-// Created by fredia on 19-3-24.   数据库关键字 （修饰符 ： not null）
+// Created by fredia on 19-3-24.   数据库关键字 （修饰符 ： not null 等）
 //
 
 #ifndef MYSQL_ORM_QUALIFIER_HPP

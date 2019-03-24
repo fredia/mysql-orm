@@ -6,5 +6,6 @@
 
 int main() {
     test_mysql_create_table();
+    test_mysql_insert();
     return 0;
 }

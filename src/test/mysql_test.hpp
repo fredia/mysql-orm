@@ -23,12 +23,36 @@ struct school {
 };
 REFLECTION(school, id, name, num);
 
+
+struct autokey {
+    int id;
+    std::string name;
+};
+REFLECTION(autokey, id, name);
+
+orm_auto_key autok{"id"};
+orm_not_null not_null{{"id", "name"}};
+
 void test_mysql_create_table() {
     mysql_orm::configuration cfg{"127.0.0.1", "test", "123456789", "test", 60, 1};
     mysql_orm::mysql mysql;
     mysql.connect(cfg);
 
     mysql.create_table<school>();
+    mysql.create_table<autokey>(autok, not_null);
+
+}
+
+void test_mysql_insert() {
+
+    mysql_orm::configuration cfg{"127.0.0.1", "test", "123456789", "test", 60, 1};
+    mysql_orm::mysql mysql;
+    mysql.connect(cfg);
+    school school1{1, "BJTU", 3000};
+    autokey ak{1, "auto"};
+
+    mysql.insert(school1);
+    mysql.insert(ak);
 
 }
 

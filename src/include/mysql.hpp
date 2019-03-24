@@ -11,6 +11,7 @@
 #include<mysql/mysql.h>
 #include <iostream>
 #include <tuple>
+#include <climits>
 #include "configuration.hpp"
 #include "type_mapping.hpp"
 #include "qualifier.hpp"
@@ -64,7 +65,7 @@ namespace mysql_orm {
         }
 
         template<typename T, typename... Args>
-        bool create_table(Args&&... args) {
+        bool create_table(Args &&... args) {
             std::string sql = generate_create_table_sql<T>(std::forward<Args>(args)...);
             if (mysql_query(con_, sql.data())) {
                 std::cerr << mysql_error(con_) << std::endl;
@@ -73,9 +74,15 @@ namespace mysql_orm {
             return true;
         }
 
-        int insert() {
+        template<typename T, typename... Args>
+        int insert(const T &t, Args &&... args) {
+            auto name = iguana::get_name<T>().data();
+            std::string sql = generate_insert_sql<T>();
 
-            return 0;
+            std::cout << sql << std::endl;
+
+
+            return insert_impl(sql, t, std::forward<Args>(args)...);
         }
 
         int update() {
@@ -125,8 +132,8 @@ namespace mysql_orm {
         }
 
         template<typename... Args>
-        inline void append_sql(std::string& sql, Args&&... args) {
-            (append(sql, std::forward<Args>(args)),...); //逗号表达式展开
+        inline void append_sql(std::string &sql, Args &&... args) {
+            (append(sql, std::forward<Args>(args)), ...); //逗号表达式展开
         }
 
         template<typename T>
@@ -143,21 +150,20 @@ namespace mysql_orm {
             sql += " ";
         }
 
-        template <typename... Args, typename Func, std::size_t... Idx>
-        inline void for_each_func(const std::tuple<Args...>& t, Func&& f, std::index_sequence<Idx...>) {
+        template<typename... Args, typename Func, std::size_t... Idx>
+        inline void for_each_func(const std::tuple<Args...> &t, Func &&f, std::index_sequence<Idx...>) {
             (f(std::get<Idx>(t)), ...);
         }
 
         template<typename... Args>
-        inline auto sort_tuple(const std::tuple<Args...>& tp){
-            if constexpr(sizeof...(Args)==2){
-                auto [a, b] = tp;
-                if constexpr(!std::is_same_v<decltype(a), orm_key>&&!std::is_same_v<decltype(a), orm_auto_key>)
+        inline auto sort_tuple(const std::tuple<Args...> &tp) {
+            if constexpr(sizeof...(Args) == 2) {
+                auto[a, b] = tp;
+                if constexpr(!std::is_same_v<decltype(a), orm_key> && !std::is_same_v<decltype(a), orm_auto_key>)
                     return std::make_tuple(b, a);
                 else
                     return tp;
-            }
-            else{
+            } else {
                 return tp;
             }
         }
@@ -198,13 +204,13 @@ namespace mysql_orm {
                         has_add_field = true;
                     } else if constexpr (std::is_same_v<decltype(item), orm_key>) {
                         if (!has_add_field) {
-                            append(sql, field_name.data(), " ", type_name_arr[i]);
+                            append_sql(sql, field_name.data(), " ", type_name_arr[i]);
                         }
                         append_sql(sql, " PRIMARY KEY");
                         has_add_field = true;
                     } else if constexpr (std::is_same_v<decltype(item), orm_auto_key>) {
                         if (!has_add_field) {
-                            append(sql, field_name.data(), " ", type_name_arr[i]);
+                            append_sql(sql, field_name.data(), " ", type_name_arr[i]);
                         }
                         append_sql(sql, " AUTO_INCREMENT");
                         append_sql(sql, " PRIMARY KEY");
@@ -237,10 +243,122 @@ namespace mysql_orm {
             return sql;
         }
 
+        template<typename T>
+        inline std::string generate_insert_sql() {
+            std::string sql = "insert into ";
+            constexpr auto SIZE = iguana::get_value<T>();
+            constexpr auto name = iguana::get_name<T>();
+            append(sql, name.data());
+
+            std::string fields = "(";
+            std::string values = " values(";
+            std::string auto_key = auto_key_map_[name.data()];
+            for (auto i = 0; i < SIZE; ++i) {
+                std::string field_name = iguana::get_name<T>(i).data();
+
+                if (field_name == auto_key) {
+                    continue;
+                }
+                values += "?";
+                fields += field_name;
+                if (i < SIZE - 1) {
+                    fields += ", ";
+                    values += ", ";
+                } else {
+                    fields += ")";
+                    values += ")";
+                }
+            }
+            append_sql(sql, fields, values);
+            return sql;
+        }
+
+
+        template<typename T>
+        void set_param_bind(std::vector<MYSQL_BIND> &param_binds, T &&value) {
+            MYSQL_BIND param = {};
+
+            using U = std::remove_const_t<std::remove_reference_t<T>>;
+            if constexpr(std::is_arithmetic_v<U>) {
+                param.buffer_type = (enum_field_types) mysql_orm::type_to_id(identity<U>{});
+                param.buffer = const_cast<void *>(static_cast<const void *>(&value));
+            } else if constexpr(std::is_same_v<std::string, U>) {
+                param.buffer_type = MYSQL_TYPE_STRING;
+                param.buffer = (void *) (value.c_str());
+                param.buffer_length = (unsigned long) value.size();
+            } else if constexpr(std::is_same_v<const char *, U> ||
+                                std::is_array_v<U> && std::is_same_v<char, std::remove_pointer_t<std::decay_t<U>>>){
+                    param.buffer_type = MYSQL_TYPE_STRING;
+                    param.buffer = (void *) (value);
+                    param.buffer_length = (unsigned long) strlen(value);
+            }
+                param_binds.push_back(param);
+        }
+
+        template<typename T>
+        int stmt_execute(const T &t) {
+            std::vector<MYSQL_BIND> param_binds;
+            auto it = auto_key_map_.find(iguana::get_name<T>().data());
+            std::string auto_key = (it == auto_key_map_.end()) ? "" : it->second;
+
+            iguana::for_each(t, [&t, &param_binds, &auto_key, this](const auto &v, auto i) {
+                set_param_bind(param_binds, t.*v);
+            });
+
+            if (mysql_stmt_bind_param(stmt_, &param_binds[0])) {
+                return INT_MIN;
+            }
+
+            if (mysql_stmt_execute(stmt_)) {
+                std::cerr << mysql_error(con_) << std::endl;
+                return INT_MIN;
+            }
+
+            int count = (int) mysql_stmt_affected_rows(stmt_);
+            if (count == 0) {
+                return INT_MIN;
+            }
+
+            return count;
+        }
+
+        template<typename T, typename... Args>
+        int insert_impl(const std::string &sql, const T &t, Args &&... args) {
+            stmt_ = mysql_stmt_init(con_);
+            if (!stmt_)
+                return INT_MIN;
+
+            if (mysql_stmt_prepare(stmt_, sql.c_str(), (int) sql.size())) {
+                return INT_MIN;
+            }
+
+            auto guard = guard_statment(stmt_);
+
+            if (stmt_execute(t) < 0)
+                return INT_MIN;
+
+            return 1;
+        }
+
     private:
+        struct guard_statment {
+            guard_statment(MYSQL_STMT *stmt) : stmt_(stmt) {}
+
+            MYSQL_STMT *stmt_ = nullptr;
+            int status_ = 0;
+
+            ~guard_statment() {
+                if (stmt_ != nullptr)
+                    status_ = mysql_stmt_close(stmt_);
+
+                if (status_)
+                    std::cerr << "close stmt failed : error code is" << status_ << std::endl;
+            }
+        };
+
         MYSQL *con_ = nullptr;
         MYSQL_STMT *stmt_ = nullptr;
-        inline static std::map<std::string, std::string> auto_key_map_;
+        inline static std::map<std::string, std::string> auto_key_map_; //todo 把auto_key 序列化到表的信息中
 
     };
 }
