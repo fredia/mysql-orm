@@ -51,8 +51,24 @@ void test_mysql_insert() {
     school school1{1, "BJTU", 3000};
     autokey ak{1, "auto"};
 
-    mysql.insert(school1);
-    mysql.insert(ak);
+    assert(mysql.insert(school1) == 1);
+    assert(mysql.insert(ak) == 1);
+
+}
+
+void test_mysql_batch_insert() {
+
+    mysql_orm::configuration cfg{"127.0.0.1", "test", "123456789", "test", 60, 1};
+    mysql_orm::mysql mysql;
+    mysql.connect(cfg);
+
+
+    vector<school> v;
+    school school1{2, "NJU", 3000};
+    school school2{3, "ZJU", 3000};
+    v.push_back(std::move(school1));
+    v.push_back(std::move(school2));
+    assert(mysql.batch_insert(v) == 2);
 
 }
 

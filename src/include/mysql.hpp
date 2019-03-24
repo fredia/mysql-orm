@@ -74,15 +74,15 @@ namespace mysql_orm {
             return true;
         }
 
-        template<typename T, typename... Args>
-        int insert(const T &t, Args &&... args) {
+        template<typename T>
+        int insert(const T &t) {
             auto name = iguana::get_name<T>().data();
             std::string sql = generate_insert_sql<T>();
 
             std::cout << sql << std::endl;
 
 
-            return insert_impl(sql, t, std::forward<Args>(args)...);
+            return insert_impl(sql, t);
         }
 
         int update() {
@@ -90,9 +90,12 @@ namespace mysql_orm {
 
         }
 
-        int batch_insert() {
+        template<typename T>
+        int batch_insert(const std::vector<T> &t) {
+            auto name = iguana::get_name<T>().data();
+            std::string sql = generate_insert_sql<T>();
 
-            return 0;
+            return insert_impl(sql, t);
         }
 
         int batch_update() {
@@ -287,12 +290,12 @@ namespace mysql_orm {
                 param.buffer = (void *) (value.c_str());
                 param.buffer_length = (unsigned long) value.size();
             } else if constexpr(std::is_same_v<const char *, U> ||
-                                std::is_array_v<U> && std::is_same_v<char, std::remove_pointer_t<std::decay_t<U>>>){
-                    param.buffer_type = MYSQL_TYPE_STRING;
-                    param.buffer = (void *) (value);
-                    param.buffer_length = (unsigned long) strlen(value);
+                                std::is_array_v<U> && std::is_same_v<char, std::remove_pointer_t<std::decay_t<U>>>) {
+                param.buffer_type = MYSQL_TYPE_STRING;
+                param.buffer = (void *) (value);
+                param.buffer_length = (unsigned long) strlen(value);
             }
-                param_binds.push_back(param);
+            param_binds.push_back(param);
         }
 
         template<typename T>
@@ -322,8 +325,8 @@ namespace mysql_orm {
             return count;
         }
 
-        template<typename T, typename... Args>
-        int insert_impl(const std::string &sql, const T &t, Args &&... args) {
+        template<typename T>
+        int insert_impl(const std::string &sql, const T &t) {
             stmt_ = mysql_stmt_init(con_);
             if (!stmt_)
                 return INT_MIN;
@@ -338,6 +341,28 @@ namespace mysql_orm {
                 return INT_MIN;
 
             return 1;
+        }
+
+        template<typename T>
+        int insert_impl(const std::string &sql, const std::vector<T> &t) {
+            stmt_ = mysql_stmt_init(con_);
+            if (!stmt_)
+                return INT_MIN;
+
+            if (mysql_stmt_prepare(stmt_, sql.c_str(), (int) sql.size())) {
+                return INT_MIN;
+            }
+
+            auto guard = guard_statment(stmt_);
+
+            //todo tx?  有空再补 先不做
+            for (auto &item : t) {
+                int r = stmt_execute(item);
+                if (r == INT_MIN) {
+                    return INT_MIN;
+                }
+            }
+            return (int) t.size();
         }
 
     private:
