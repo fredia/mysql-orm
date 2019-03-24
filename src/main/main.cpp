@@ -5,7 +5,6 @@
 #include "../test/mysql_test.hpp"
 
 int main() {
-    test_config();
-    test_mysql_connection();
+    test_mysql_create_table();
     return 0;
 }
