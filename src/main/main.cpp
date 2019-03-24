@@ -1,12 +1,11 @@
 #include <iostream>
 #include <mysql/mysql.h>
 #include "configuration.hpp"
-
-using namespace std;
+#include "../test/configuration_test.hpp"
+#include "../test/mysql_test.hpp"
 
 int main() {
-    mysql_orm::configuration cfg{"127.0.0.1", "root", "000000", "test", 3000, 1};
-    mysql_orm::config_manager::to_file(cfg, "mysql.cnf"sv);
-    cout << mysql_orm::config_manager::get<string>("passwd", "mysql.cnf"sv);
+    test_config();
+    test_mysql_connection();
     return 0;
 }
