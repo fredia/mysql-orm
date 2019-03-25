@@ -6,5 +6,5 @@ set(CMAKE_CXX_STANDARD 17)
 include_directories(src/include)
 aux_source_directory(src/main dir_srcs)
 
-add_executable(mysql_orm ${dir_srcs} src/include/mysql.hpp src/include/configuration.hpp src/test/configuration_test.hpp src/test/mysql_test.hpp src/include/type_mapping.hpp src/include/qualifier.hpp src/include/connection_pool.hpp)
+add_executable(mysql_orm ${dir_srcs} src/include/mysql.hpp src/include/configuration.hpp src/test/configuration_test.hpp src/test/mysql_test.hpp src/include/type_mapping.hpp src/include/qualifier.hpp src/include/connection_pool.hpp src/test/connection_pool_test.hpp)
 target_link_libraries(mysql_orm mysqlclient)

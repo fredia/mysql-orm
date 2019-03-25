@@ -3,9 +3,8 @@
 #include "configuration.hpp"
 #include "../test/configuration_test.hpp"
 #include "../test/mysql_test.hpp"
-
+#include "../test/connection_pool_test.hpp"
 int main() {
-    test_mysql_create_table();
-    test_mysql_execute();
+    test_pool();
     return 0;
 }
