@@ -13,6 +13,7 @@
 #include <tuple>
 #include <climits>
 #include <sstream>
+#include <chrono>
 #include "configuration.hpp"
 #include "type_mapping.hpp"
 #include "qualifier.hpp"
@@ -54,6 +55,7 @@ namespace mysql_orm {
                 std::cerr << mysql_error(con_) << std::endl;
                 return false;
             }
+            tp_ = std::chrono::system_clock::now();
             return true;
         }
 
@@ -65,6 +67,10 @@ namespace mysql_orm {
             return true;
         }
 
+        std::chrono::system_clock::time_point get_tp() {
+            return tp_;
+        }
+
         template<typename T, typename... Args>
         bool create_table(Args &&... args) {
             std::string sql = generate_create_table_sql<T>(std::forward<Args>(args)...);
@@ -72,6 +78,7 @@ namespace mysql_orm {
                 std::cerr << mysql_error(con_) << std::endl;
                 return false;
             }
+            tp_ = std::chrono::system_clock::now();
             return true;
         }
 
@@ -79,6 +86,7 @@ namespace mysql_orm {
         std::enable_if_t<iguana::is_reflection_v<T>, int> insert(const T &t) {
             std::string sql = generate_insert_sql<T>();
             std::cout << sql << std::endl;
+            tp_ = std::chrono::system_clock::now();
             return insert_impl(sql, t);
         }
 
@@ -105,12 +113,14 @@ namespace mysql_orm {
 
             int count = (int) mysql_stmt_affected_rows(stmt_);
 
+            tp_ = std::chrono::system_clock::now();
             return count;
         }
 
         template<typename T>
         std::enable_if_t<iguana::is_reflection_v<T>, int> batch_insert(const std::vector<T> &t) {
             std::string sql = generate_insert_sql<T>();
+            tp_ = std::chrono::system_clock::now();
             return insert_impl(sql, t);
         }
 
@@ -137,6 +147,7 @@ namespace mysql_orm {
 
             int count = (int) mysql_stmt_affected_rows(stmt_);
 
+            tp_ = std::chrono::system_clock::now();
             return count;
 
         }
@@ -214,6 +225,7 @@ namespace mysql_orm {
                 v.push_back(std::move(t));
             }
 
+            tp_ = std::chrono::system_clock::now();
             return v;
         }
 
@@ -226,6 +238,7 @@ namespace mysql_orm {
                 std::cerr << mysql_error(con_) << std::endl;
                 return false;
             }
+            tp_ = std::chrono::system_clock::now();
             return true;
         }
 
@@ -592,7 +605,7 @@ namespace mysql_orm {
         MYSQL *con_ = nullptr;
         MYSQL_STMT *stmt_ = nullptr;
         inline static std::map<std::string, std::string> auto_key_map_; //todo 把auto_key 序列化到表的信息中
-
+        std::chrono::system_clock::time_point tp_;
     };
 }
 #endif //MYSQL_ORM_MYSQL_HPP
