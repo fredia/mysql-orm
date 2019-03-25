@@ -229,6 +229,25 @@ namespace mysql_orm {
             return true;
         }
 
+        /**
+         * tx
+         * @return
+         */
+        bool begin_tx() {
+            string sql = "BEGIN";
+            return execute(sql);
+        }
+
+        bool commit_tx() {
+            string sql = "COMMIT";
+            return execute(sql);
+        }
+
+        bool rollback_tx() {
+            string sql = "ROLLBACK";
+            return execute(sql);
+        }
+
     private:
 
         template<typename T>
@@ -467,13 +486,15 @@ namespace mysql_orm {
 
             auto guard = guard_statment(stmt_);
 
-            //todo tx?  有空再补 先不做
+            begin_tx();
             for (auto &item : t) {
                 int r = stmt_execute(item);
                 if (r == INT_MIN) {
+                    rollback_tx();
                     return INT_MIN;
                 }
             }
+            commit_tx();
             return (int) t.size();
         }
 
