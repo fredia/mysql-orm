@@ -85,9 +85,9 @@ namespace mysql_orm {
             return insert_impl(sql, t);
         }
 
-        int update() {
+        template<typename T>
+        int update(const T &t) {
             return 0;
-
         }
 
         template<typename T>
@@ -98,18 +98,84 @@ namespace mysql_orm {
             return insert_impl(sql, t);
         }
 
-        int batch_update() {
-            return 0;
-
-        }
-
         bool delete_records() {
             return 0;
         }
 
-        template<typename T>
-        std::vector<T> query() {
-            return nullptr;
+        template<typename T, typename... Args>
+        std::enable_if_t<iguana::is_reflection_v<T>, std::vector<T>> query(Args &&... args) {
+            std::string sql = generate_query_sql<T>(args...);
+            constexpr auto SIZE = iguana::get_value<T>();
+
+            stmt_ = mysql_stmt_init(con_);
+            if (!stmt_) {
+                std::cerr << "init stmt failed" << std::endl;
+                return {};
+            }
+
+            if (mysql_stmt_prepare(stmt_, sql.c_str(), (unsigned long) sql.size())) {
+                std::cerr << "prepare stmt failed" << std::endl;
+                return {};
+            }
+
+            auto guard = guard_statment(stmt_);
+
+            std::array<MYSQL_BIND, SIZE> param_binds = {};
+            std::map<size_t, std::vector<char>> mp;
+
+            std::vector<T> v;
+            T t{};
+            iguana::for_each(t, [&](auto item, auto i) {
+                constexpr auto Idx = decltype(i)::value;
+                using U = std::remove_reference_t<decltype(std::declval<T>().*item)>;
+                if constexpr(std::is_arithmetic_v<U>) {
+                    param_binds[Idx].buffer_type = (enum_field_types) mysql_orm::type_to_id(identity<U>{});
+                    param_binds[Idx].buffer = &(t.*item);
+                } else if constexpr(std::is_same_v<std::string, U>) {
+                    param_binds[Idx].buffer_type = MYSQL_TYPE_STRING;
+                    std::vector<char> tmp(65536, 0);
+                    mp.emplace(decltype(i)::value, tmp);
+                    param_binds[Idx].buffer = &(mp.rbegin()->second[0]);
+                    param_binds[Idx].buffer_length = (unsigned long) tmp.size();
+                } else if constexpr(std::is_array_v<U> &&
+                                    std::is_same_v<char, std::remove_pointer_t<std::decay_t<U>>>) {
+                    param_binds[Idx].buffer_type = MYSQL_TYPE_VAR_STRING;
+                    std::vector<char> tmp(sizeof(U), 0);
+                    mp.emplace(decltype(i)::value, tmp);
+                    param_binds[Idx].buffer = &(mp.rbegin()->second[0]);
+                    param_binds[Idx].buffer_length = (unsigned long) sizeof(U);
+                }
+            });
+
+            if (mysql_stmt_bind_result(stmt_, &param_binds[0])) {
+                std::cerr << mysql_error(con_) << std::endl;
+                return {};
+            }
+
+            if (mysql_stmt_execute(stmt_)) {
+                std::cerr << mysql_error(con_) << std::endl;
+                return {};
+            }
+
+            while (mysql_stmt_fetch(stmt_) == 0) {
+                using TP = decltype(iguana::get(std::declval<T>()));
+
+                iguana::for_each(t, [&mp, &t](auto item, auto i) {
+                    using U = std::remove_reference_t<decltype(std::declval<T>().*item)>;
+                    if constexpr(std::is_same_v<std::string, U>) {
+                        auto &vec = mp[decltype(i)::value];
+                        t.*item = std::string(&vec[0], strlen(vec.data()));
+                    } else if constexpr(std::is_array_v<U> &&
+                                        std::is_same_v<char, std::remove_pointer_t<std::decay_t<U>>>) {
+                        auto &vec = mp[decltype(i)::value];
+                        memcpy(t.*item, vec.data(), vec.size());
+                    }
+                });
+
+                v.push_back(std::move(t));
+            }
+
+            return v;
         }
 
         bool execute() {
@@ -206,10 +272,10 @@ namespace mysql_orm {
                         append_sql(sql, " NOT NULL");
                         has_add_field = true;
                     } else if constexpr (std::is_same_v<decltype(item), orm_key>) {
+                        append_sql(sql, " PRIMARY KEY");
                         if (!has_add_field) {
                             append_sql(sql, field_name.data(), " ", type_name_arr[i]);
                         }
-                        append_sql(sql, " PRIMARY KEY");
                         has_add_field = true;
                     } else if constexpr (std::is_same_v<decltype(item), orm_auto_key>) {
                         if (!has_add_field) {
@@ -363,6 +429,20 @@ namespace mysql_orm {
                 }
             }
             return (int) t.size();
+        }
+
+        template<typename T, typename... Args>
+        inline std::string generate_query_sql(Args &&... args) {
+            constexpr size_t param_size = sizeof...(Args);
+            static_assert(param_size == 0 || param_size > 0);
+            std::string sql = "select * from ";
+            constexpr auto name = iguana::get_name<T>();
+            append_sql(sql, name.data());
+
+            append_sql(sql, std::forward<Args>(args)...);
+
+            std::cout << sql << std::endl;
+            return sql;
         }
 
     private:

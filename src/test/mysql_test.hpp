@@ -72,4 +72,17 @@ void test_mysql_batch_insert() {
 
 }
 
+void test_mysql_query() {
+    mysql_orm::configuration cfg{"127.0.0.1", "test", "123456789", "test", 60, 1};
+    mysql_orm::mysql mysql;
+    mysql.connect(cfg);
+
+    auto res = mysql.query<school>();
+    std::cout << res.size() << std::endl;
+
+    res = mysql.query<school>("where id = 1");
+    std::cout << res.size() << std::endl;
+}
+
+
 #endif //MYSQL_ORM_MYSQL_TEST_HPP
