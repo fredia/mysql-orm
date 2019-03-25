@@ -6,6 +6,6 @@
 
 int main() {
     test_mysql_create_table();
-    test_mysql_query();
+    test_mysql_delete();
     return 0;
 }

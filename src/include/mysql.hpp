@@ -98,8 +98,32 @@ namespace mysql_orm {
             return insert_impl(sql, t);
         }
 
-        bool delete_records() {
-            return 0;
+        template<typename T, typename... Args>
+        std::enable_if_t<iguana::is_reflection_v<T>, int> delete_records(Args &&... args) {
+            std::string sql = generate_delete_sql<T>(args...);
+            stmt_ = mysql_stmt_init(con_);
+            stmt_ = mysql_stmt_init(con_);
+            if (!stmt_) {
+                std::cerr << "init stmt failed" << std::endl;
+                return {};
+            }
+
+            if (mysql_stmt_prepare(stmt_, sql.c_str(), (unsigned long) sql.size())) {
+                std::cerr << "prepare stmt failed" << std::endl;
+                return {};
+            }
+
+            auto guard = guard_statment(stmt_);
+
+            if (mysql_stmt_execute(stmt_)) {
+                std::cerr << mysql_error(con_) << std::endl;
+                return INT_MIN;
+            }
+
+            int count = (int) mysql_stmt_affected_rows(stmt_);
+
+            return count;
+
         }
 
         template<typename T, typename... Args>
@@ -441,6 +465,20 @@ namespace mysql_orm {
 
             append_sql(sql, std::forward<Args>(args)...);
 
+            std::cout << sql << std::endl;
+            return sql;
+        }
+
+
+        template<typename T, typename... Args>
+        inline std::string generate_delete_sql(Args &&... args) {
+            constexpr size_t param_size = sizeof...(Args);
+            static_assert(param_size == 0 || param_size > 0);
+            std::string sql = "delete from ";
+            constexpr auto name = iguana::get_name<T>();
+            append_sql(sql, name.data());
+
+            append_sql(sql, std::forward<Args>(args)...);
             std::cout << sql << std::endl;
             return sql;
         }
