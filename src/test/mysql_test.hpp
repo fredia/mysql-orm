@@ -105,5 +105,13 @@ void test_mysql_update() {
     std::cout << mysql.update<school>(school2, "where id=2");
 }
 
+void test_mysql_execute() {
+    mysql_orm::configuration cfg{"127.0.0.1", "test", "123456789", "test", 60, 1};
+    mysql_orm::mysql mysql;
+    mysql.connect(cfg);
+    mysql.create_table<autokey>(autok, not_null);
+    std::cout<<mysql.execute("drop table autokey")<<std::endl;
+    mysql.create_table<autokey>(autok, not_null);
+}
 
 #endif //MYSQL_ORM_MYSQL_TEST_HPP

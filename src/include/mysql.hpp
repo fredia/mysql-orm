@@ -68,7 +68,7 @@ namespace mysql_orm {
         template<typename T, typename... Args>
         bool create_table(Args &&... args) {
             std::string sql = generate_create_table_sql<T>(std::forward<Args>(args)...);
-            if (mysql_query(con_, sql.data())) {
+            if (mysql_real_query(con_, sql.data(), sql.length())) {
                 std::cerr << mysql_error(con_) << std::endl;
                 return false;
             }
@@ -217,9 +217,16 @@ namespace mysql_orm {
             return v;
         }
 
-        bool execute() {
-            return false;
-
+        /**
+         * 只支持没有占位符 的语句，可用作 drop table，drop database
+         * @return
+         */
+        bool execute(const std::string &sql) {
+            if (mysql_real_query(con_, sql.data(), sql.length()) != 0) {
+                std::cerr << mysql_error(con_) << std::endl;
+                return false;
+            }
+            return true;
         }
 
     private:
@@ -513,7 +520,7 @@ namespace mysql_orm {
                 ss << "'" << value << "'";
             } else if constexpr(std::is_same_v<const char *, U> ||
                                 std::is_array_v<U> && std::is_same_v<char, std::remove_pointer_t<std::decay_t<U>>>) {
-                ss << "'"<<string(value)<<"'";
+                ss << "'" << string(value) << "'";
             }
             std::string str;
             ss >> str;
