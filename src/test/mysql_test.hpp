@@ -94,5 +94,16 @@ void test_mysql_delete() {
 
 }
 
+void test_mysql_update() {
+    mysql_orm::configuration cfg{"127.0.0.1", "test", "123456789", "test", 60, 1};
+    mysql_orm::mysql mysql;
+    mysql.connect(cfg);
+    std::cout << mysql.delete_records<school>("where id = 2") << std::endl;
+    school school1{2, "TJU", 3000};
+    mysql.insert<school>(school1);
+    school school2{2, "NJU", 5000};
+    std::cout << mysql.update<school>(school2, "where id=2");
+}
+
 
 #endif //MYSQL_ORM_MYSQL_TEST_HPP
