@@ -444,7 +444,11 @@ namespace mysql_orm {
             std::string auto_key = (it == auto_key_map_.end()) ? "" : it->second;
 
             iguana::for_each(t, [&t, &param_binds, &auto_key, this](const auto &v, auto i) {
-                set_param_bind(param_binds, t.*v);
+                std::string field_name = iguana::get_name<T>(i).data();
+
+                if (field_name != auto_key) {
+                    set_param_bind(param_binds, t.*v);
+                }
             });
 
             if (mysql_stmt_bind_param(stmt_, &param_binds[0])) {

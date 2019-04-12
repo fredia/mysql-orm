@@ -5,6 +5,6 @@
 #include "../test/mysql_test.hpp"
 #include "../test/connection_pool_test.hpp"
 int main() {
-    test_pool();
+    test_mysql_insert();
     return 0;
 }
